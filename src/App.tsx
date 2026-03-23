@@ -50,10 +50,19 @@ const LAYOUTS = {
 
 const WATCHLIST_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
 
+const QUICK_INDICATORS = [
+  { name: 'RSI', params: { period: 14 }, label: 'RSI' },
+  { name: 'MACD', params: { fast: 12, slow: 26, signal: 9 }, label: 'MACD' },
+  { name: 'EMA', params: { period: 20 }, label: 'EMA20' },
+  { name: 'Bollinger', params: { period: 20, stdDev: 2 }, label: 'BB' },
+] as const;
+
 export default function App() {
   const activeSymbol = useMarketStore((s) => s.activeSymbol);
   const activeTimeframe = useMarketStore((s) => s.activeTimeframe);
   const theme = useSettingsStore((s) => s.theme);
+  const indicators = useSettingsStore((s) => s.indicators);
+  const toggleIndicator = useSettingsStore((s) => s.toggleIndicator);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -99,6 +108,12 @@ export default function App() {
     };
   }, [activeSymbol, activeTimeframe]);
 
+  function isQuickIndicatorOn(name: string, params: Record<string, number>): boolean {
+    return indicators.some(
+      (ind) => ind.name === name && ind.enabled && JSON.stringify(ind.params) === JSON.stringify(params)
+    );
+  }
+
   return (
     <div className="app">
       <Header />
@@ -114,7 +129,27 @@ export default function App() {
           margin={[6, 6]}
         >
           <div key="chart" className="panel">
-            <div className="panel-header">Chart \u2014 {activeSymbol} {activeTimeframe}</div>
+            <div className="panel-header">
+              <span>Chart \u2014 {activeSymbol} {activeTimeframe}</span>
+              <span className="indicator-quick-toggles">
+                {QUICK_INDICATORS.map((qi) => {
+                  const on = isQuickIndicatorOn(qi.name, qi.params as Record<string, number>);
+                  return (
+                    <button
+                      key={qi.label}
+                      className={`indicator-quick-btn ${on ? 'indicator-quick-btn--on' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleIndicator(qi.name, qi.params as Record<string, number>);
+                      }}
+                      title={`Toggle ${qi.label}`}
+                    >
+                      {qi.label}
+                    </button>
+                  );
+                })}
+              </span>
+            </div>
             <div className="panel-body panel-body--chart">
               <TradingChart />
             </div>
