@@ -1,26 +1,44 @@
 import { useMarketStore } from '../../stores/marketStore';
 import type { Candle, Timeframe } from '../../types/market';
 
-const TF_MAP: Record<Timeframe, string> = {
-  '1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30',
-  '1h': '60', '2h': '120', '4h': '240', '6h': '360', '8h': '480', '12h': '720',
-  '1d': 'D', '3d': 'D', '1w': 'W', '1M': 'M',
-};
+// --- REST via Vercel Edge proxy (CoinGecko-backed) ---
 
-// --- REST (via Vercel Edge proxy) ---
+let lastKlineFetch = 0;
+const KLINE_COOLDOWN = 5000; // 5s minimum between kline fetches
 
 export async function fetchKlines(symbol: string, timeframe: Timeframe, limit: number = 500): Promise<Candle[]> {
+  // Rate-limit client side too
+  const now = Date.now();
+  if (now - lastKlineFetch < KLINE_COOLDOWN) {
+    const existing = useMarketStore.getState().candles[`${symbol}:${timeframe}`];
+    if (existing && existing.length > 0) return existing;
+  }
+  lastKlineFetch = now;
+
   const url = `/api/klines?symbol=${symbol}&interval=${timeframe}&limit=${limit}`;
-  console.log('[Bybit] Fetching klines:', url);
+  console.log('[Data] Fetching klines:', url);
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Klines HTTP ${res.status}`);
+  if (!res.ok) {
+    console.warn(`[Data] Klines HTTP ${res.status}`);
+    return [];
+  }
   const data = await res.json();
-  if (!Array.isArray(data)) throw new Error('Klines response is not an array');
-  console.log(`[Bybit] Got ${data.length} candles`);
+  if (!Array.isArray(data)) {
+    console.warn('[Data] Klines response not an array');
+    return [];
+  }
+  console.log(`[Data] Got ${data.length} candles for ${symbol}:${timeframe}`);
   return data as Candle[];
 }
 
+let lastTickerFetch = 0;
+const TICKER_COOLDOWN = 10000;
+
 export async function fetchTicker(symbol: string): Promise<void> {
+  const now = Date.now();
+  if (now - lastTickerFetch < TICKER_COOLDOWN) return;
+  lastTickerFetch = now;
+
   try {
     const res = await fetch(`/api/ticker?symbol=${symbol}`);
     if (!res.ok) return;
@@ -32,11 +50,18 @@ export async function fetchTicker(symbol: string): Promise<void> {
       timestamp: Date.now(),
     });
   } catch (err) {
-    console.warn('[Bybit] Ticker error:', err);
+    console.warn('[Data] Ticker error:', err);
   }
 }
 
+let lastOBFetch = 0;
+const OB_COOLDOWN = 10000;
+
 export async function fetchOrderbook(symbol: string): Promise<void> {
+  const now = Date.now();
+  if (now - lastOBFetch < OB_COOLDOWN) return;
+  lastOBFetch = now;
+
   try {
     const res = await fetch(`/api/orderbook?symbol=${symbol}&limit=25`);
     if (!res.ok) return;
@@ -49,7 +74,7 @@ export async function fetchOrderbook(symbol: string): Promise<void> {
       timestamp: Date.now(),
     });
   } catch (err) {
-    console.warn('[Bybit] Orderbook error:', err);
+    console.warn('[Data] Orderbook error:', err);
   }
 }
 
@@ -69,12 +94,19 @@ export async function fetchFundingRates(): Promise<void> {
       });
     }
   } catch (err) {
-    console.warn('[Bybit] Funding rates error:', err);
+    console.warn('[Data] Funding rates error:', err);
   }
 }
 
 export async function fetchAllTickers(symbols: string[]): Promise<void> {
-  for (const symbol of symbols) {
-    await fetchTicker(symbol);
+  // Use CoinGecko bulk endpoint instead of individual calls
+  try {
+    const res = await fetch('/api/coins');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!Array.isArray(data)) return;
+    // CoinGecko coins endpoint already handled in coingecko.ts
+  } catch {
+    // Silently fail — CoinGecko polling in App.tsx handles this
   }
 }
