@@ -1,134 +1,170 @@
 export const config = { runtime: 'edge' };
 
-const COIN_MAP: Record<string, string> = {
-  BTCUSDT: 'bitcoin', ETHUSDT: 'ethereum', SOLUSDT: 'solana',
-  BNBUSDT: 'binancecoin', XRPUSDT: 'ripple', DOGEUSDT: 'dogecoin',
-  ADAUSDT: 'cardano', AVAXUSDT: 'avalanche-2', DOTUSDT: 'polkadot',
-  MATICUSDT: 'matic-network', LINKUSDT: 'chainlink', LTCUSDT: 'litecoin',
+// CryptoCompare has proper OHLCV endpoints for every timeframe
+// Free tier: 100K calls/month, no geo-blocking, no auth required for basic
+
+const SYMBOL_MAP: Record<string, string> = {
+  BTCUSDT: 'BTC', ETHUSDT: 'ETH', SOLUSDT: 'SOL',
+  BNBUSDT: 'BNB', XRPUSDT: 'XRP', DOGEUSDT: 'DOGE',
+  ADAUSDT: 'ADA', AVAXUSDT: 'AVAX', DOTUSDT: 'DOT',
+  MATICUSDT: 'MATIC', LINKUSDT: 'LINK', LTCUSDT: 'LTC',
 };
 
-// Map our timeframe to CoinGecko days + expected candle duration
-const TF_CONFIG: Record<string, { days: string; candleSec: number; cache: number }> = {
-  '1m':  { days: '1',   candleSec: 60,      cache: 30 },
-  '3m':  { days: '1',   candleSec: 180,     cache: 30 },
-  '5m':  { days: '1',   candleSec: 300,     cache: 30 },
-  '15m': { days: '1',   candleSec: 900,     cache: 60 },
-  '30m': { days: '1',   candleSec: 1800,    cache: 60 },
-  '1h':  { days: '7',   candleSec: 3600,    cache: 120 },
-  '2h':  { days: '14',  candleSec: 7200,    cache: 120 },
-  '4h':  { days: '30',  candleSec: 14400,   cache: 300 },
-  '6h':  { days: '30',  candleSec: 21600,   cache: 300 },
-  '8h':  { days: '60',  candleSec: 28800,   cache: 300 },
-  '12h': { days: '60',  candleSec: 43200,   cache: 300 },
-  '1d':  { days: '180', candleSec: 86400,   cache: 600 },
-  '3d':  { days: '365', candleSec: 259200,  cache: 600 },
-  '1w':  { days: '365', candleSec: 604800,  cache: 600 },
-  '1M':  { days: 'max', candleSec: 2592000, cache: 3600 },
-};
+interface CCResponse {
+  Response: string;
+  Data: {
+    Data: {
+      time: number;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      volumefrom: number;
+      volumeto: number;
+    }[];
+  };
+}
 
 export default async function handler(req: Request) {
   const url = new URL(req.url);
   const symbol = url.searchParams.get('symbol') || 'BTCUSDT';
   const interval = url.searchParams.get('interval') || '1h';
+  const limit = url.searchParams.get('limit') || '300';
 
-  const coinId = COIN_MAP[symbol] || 'bitcoin';
-  const config = TF_CONFIG[interval] || TF_CONFIG['1h'];
+  const fsym = SYMBOL_MAP[symbol] || symbol.replace('USDT', '');
+
+  // Map timeframe to CryptoCompare endpoint + aggregate
+  let endpoint: string;
+  let aggregate = 1;
+  let cacheSec = 60;
+
+  switch (interval) {
+    case '1m':
+      endpoint = 'histominute';
+      aggregate = 1;
+      cacheSec = 15;
+      break;
+    case '3m':
+      endpoint = 'histominute';
+      aggregate = 3;
+      cacheSec = 15;
+      break;
+    case '5m':
+      endpoint = 'histominute';
+      aggregate = 5;
+      cacheSec = 30;
+      break;
+    case '15m':
+      endpoint = 'histominute';
+      aggregate = 15;
+      cacheSec = 60;
+      break;
+    case '30m':
+      endpoint = 'histominute';
+      aggregate = 30;
+      cacheSec = 60;
+      break;
+    case '1h':
+      endpoint = 'histohour';
+      aggregate = 1;
+      cacheSec = 120;
+      break;
+    case '2h':
+      endpoint = 'histohour';
+      aggregate = 2;
+      cacheSec = 120;
+      break;
+    case '4h':
+      endpoint = 'histohour';
+      aggregate = 4;
+      cacheSec = 300;
+      break;
+    case '6h':
+      endpoint = 'histohour';
+      aggregate = 6;
+      cacheSec = 300;
+      break;
+    case '8h':
+      endpoint = 'histohour';
+      aggregate = 8;
+      cacheSec = 300;
+      break;
+    case '12h':
+      endpoint = 'histohour';
+      aggregate = 12;
+      cacheSec = 300;
+      break;
+    case '1d':
+      endpoint = 'histoday';
+      aggregate = 1;
+      cacheSec = 600;
+      break;
+    case '3d':
+      endpoint = 'histoday';
+      aggregate = 3;
+      cacheSec = 600;
+      break;
+    case '1w':
+      endpoint = 'histoday';
+      aggregate = 7;
+      cacheSec = 600;
+      break;
+    case '1M':
+      endpoint = 'histoday';
+      aggregate = 30;
+      cacheSec = 3600;
+      break;
+    default:
+      endpoint = 'histohour';
+      aggregate = 1;
+      cacheSec = 120;
+  }
+
+  const ccUrl = `https://min-api.cryptocompare.com/data/v2/${endpoint}?fsym=${fsym}&tsym=USD&limit=${limit}&aggregate=${aggregate}`;
 
   try {
-    // Use market_chart endpoint — more reliable than OHLC, better rate limits
-    const cgUrl = `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${config.days}`;
-    const res = await fetch(cgUrl);
-
-    if (res.status === 429) {
-      // Rate limited — return empty with short cache so client retries soon
+    const res = await fetch(ccUrl);
+    if (!res.ok) {
       return new Response(JSON.stringify([]), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
-          'Cache-Control': 's-maxage=10, stale-while-revalidate=20',
+          'Cache-Control': 's-maxage=10',
         },
       });
     }
 
-    if (!res.ok) {
+    const json = (await res.json()) as CCResponse;
+    if (json.Response === 'Error' || !json.Data?.Data) {
       return new Response(JSON.stringify([]), {
         status: 200,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       });
     }
 
-    const data = await res.json() as { prices?: number[][]; total_volumes?: number[][] };
-    const prices = data.prices || [];
-    const volumes = data.total_volumes || [];
-
-    if (prices.length === 0) {
-      return new Response(JSON.stringify([]), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      });
-    }
-
-    // Build volume lookup
-    const volMap = new Map<number, number>();
-    for (const [ts, vol] of volumes) {
-      volMap.set(ts, vol);
-    }
-
-    // Group price points into candles of the requested duration
-    const candleDurationMs = config.candleSec * 1000;
-    const candles: { time: number; open: number; high: number; low: number; close: number; volume: number }[] = [];
-
-    let bucketStart = Math.floor(prices[0][0] / candleDurationMs) * candleDurationMs;
-    let open = prices[0][1];
-    let high = prices[0][1];
-    let low = prices[0][1];
-    let close = prices[0][1];
-    let vol = 0;
-
-    for (const [ts, price] of prices) {
-      if (ts >= bucketStart + candleDurationMs) {
-        // Save completed candle
-        candles.push({
-          time: Math.floor(bucketStart / 1000),
-          open, high, low, close,
-          volume: vol,
-        });
-
-        // Start new bucket
-        bucketStart = Math.floor(ts / candleDurationMs) * candleDurationMs;
-        open = price;
-        high = price;
-        low = price;
-        close = price;
-        vol = 0;
-      } else {
-        high = Math.max(high, price);
-        low = Math.min(low, price);
-        close = price;
-      }
-
-      // Accumulate nearest volume
-      const nearestVol = volMap.get(ts);
-      if (nearestVol !== undefined) vol += nearestVol;
-    }
-
-    // Don't forget the last candle
-    if (open !== undefined) {
-      candles.push({
-        time: Math.floor(bucketStart / 1000),
-        open, high, low, close,
-        volume: vol,
-      });
-    }
+    const candles = json.Data.Data
+      .filter((c) => c.open > 0) // Filter out zero-price entries
+      .map((c) => ({
+        time: c.time,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+        volume: c.volumefrom,
+      }));
 
     return new Response(JSON.stringify(candles), {
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
-        'Cache-Control': `s-maxage=${config.cache}, stale-while-revalidate=${config.cache * 2}`,
+        'Cache-Control': `s-maxage=${cacheSec}, stale-while-revalidate=${cacheSec * 2}`,
       },
     });
-  } catch (err) {
+  } catch {
     return new Response(JSON.stringify([]), {
       status: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
