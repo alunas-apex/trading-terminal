@@ -4,34 +4,26 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
-    "dev:client": "vite",
+    "dev": "vite",
     "dev:server": "tsx watch server/index.ts",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.60.0",
-    "fastify": "^5.1.0",
-    "@fastify/websocket": "^11.0.0",
-    "@fastify/cors": "^10.0.0",
-    "@fastify/static": "^8.0.0",
     "lightweight-charts": "^4.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-grid-layout": "^1.4.4",
-    "zustand": "^5.0.0",
-    "ws": "^8.18.0"
+    "react-resizable": "^3.0.5",
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/react-grid-layout": "^1.3.5",
-    "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.3.4",
-    "concurrently": "^9.1.0",
-    "tsx": "^4.19.0",
     "typescript": "^5.6.3",
     "vite": "^6.0.0"
   }

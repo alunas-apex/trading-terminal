@@ -1,26 +1,38 @@
-import { useEffect, useRef } from 'react';
-import { createChart, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
+import { useEffect, useRef, useCallback } from 'react';
+import { createChart, type IChartApi, type ISeriesApi, ColorType, type UTCTimestamp } from 'lightweight-charts';
 import { useMarketStore } from '../../stores/marketStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 
 export function TradingChart() {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
 
   const activeSymbol = useMarketStore((s) => s.activeSymbol);
   const activeTimeframe = useMarketStore((s) => s.activeTimeframe);
   const candles = useMarketStore((s) => s.candles.get(`${activeSymbol}:${activeTimeframe}`));
   const theme = useSettingsStore((s) => s.theme);
-
   const isDark = theme === 'dark';
 
-  // Create chart
+  // Create chart on mount / theme change
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-    const chart = createChart(containerRef.current, {
+    // Clean up existing chart
+    if (chartRef.current) {
+      chartRef.current.remove();
+      chartRef.current = null;
+      candleSeriesRef.current = null;
+      volumeSeriesRef.current = null;
+    }
+
+    const { width, height } = container.getBoundingClientRect();
+
+    const chart = createChart(container, {
+      width: width || 800,
+      height: height || 400,
       layout: {
         background: { type: ColorType.Solid, color: isDark ? '#16161f' : '#ffffff' },
         textColor: isDark ? '#8888a0' : '#555570',
@@ -32,8 +44,8 @@ export function TradingChart() {
         horzLines: { color: isDark ? '#1e1e2a' : '#f0f0f5' },
       },
       crosshair: {
-        vertLine: { color: isDark ? '#6366f1' : '#6366f1', width: 1, style: 2 },
-        horzLine: { color: isDark ? '#6366f1' : '#6366f1', width: 1, style: 2 },
+        vertLine: { color: '#6366f1', width: 1, style: 2 },
+        horzLine: { color: '#6366f1', width: 1, style: 2 },
       },
       rightPriceScale: {
         borderColor: isDark ? '#2a2a3a' : '#e0e0e8',
@@ -66,35 +78,36 @@ export function TradingChart() {
     });
 
     chartRef.current = chart;
-    seriesRef.current = candleSeries;
-    volumeRef.current = volumeSeries;
+    candleSeriesRef.current = candleSeries;
+    volumeSeriesRef.current = volumeSeries;
 
+    // Resize observer
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        chart.applyOptions({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height,
-        });
+        const { width: w, height: h } = entry.contentRect;
+        if (w > 0 && h > 0) {
+          chart.applyOptions({ width: w, height: h });
+        }
       }
     });
 
-    resizeObserver.observe(containerRef.current);
+    resizeObserver.observe(container);
 
     return () => {
       resizeObserver.disconnect();
       chart.remove();
       chartRef.current = null;
-      seriesRef.current = null;
-      volumeRef.current = null;
+      candleSeriesRef.current = null;
+      volumeSeriesRef.current = null;
     };
   }, [isDark]);
 
-  // Update candle data
+  // Update data when candles change
   useEffect(() => {
-    if (!seriesRef.current || !volumeRef.current || !candles?.length) return;
+    if (!candleSeriesRef.current || !volumeSeriesRef.current || !candles?.length) return;
 
     const candleData = candles.map((c) => ({
-      time: c.time as import('lightweight-charts').UTCTimestamp,
+      time: c.time as UTCTimestamp,
       open: c.open,
       high: c.high,
       low: c.low,
@@ -102,19 +115,30 @@ export function TradingChart() {
     }));
 
     const volumeData = candles.map((c) => ({
-      time: c.time as import('lightweight-charts').UTCTimestamp,
+      time: c.time as UTCTimestamp,
       value: c.volume,
       color: c.close >= c.open ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)',
     }));
 
-    seriesRef.current.setData(candleData);
-    volumeRef.current.setData(volumeData);
+    try {
+      candleSeriesRef.current.setData(candleData);
+      volumeSeriesRef.current.setData(volumeData);
+      chartRef.current?.timeScale().fitContent();
+    } catch (err) {
+      console.error('[Chart] Error setting data:', err);
+    }
   }, [candles]);
 
   return (
     <div
       ref={containerRef}
-      style={{ width: '100%', height: '100%' }}
+      style={{
+        width: '100%',
+        height: '100%',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+      }}
     />
   );
 }

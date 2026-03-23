@@ -9,9 +9,6 @@ import { useMarketStore } from '../../stores/marketStore';
 import type { Candle, Timeframe } from '../../types/market';
 
 const BINANCE_WS = 'wss://stream.binance.com:9443/ws';
-const BINANCE_FAPI_WS = 'wss://fstream.binance.com/ws';
-const BINANCE_REST = 'https://api.binance.com/api/v3';
-const BINANCE_FAPI_REST = 'https://fapi.binance.com/fapi/v1';
 
 const TF_MAP: Record<Timeframe, string> = {
   '1m': '1m', '3m': '3m', '5m': '5m', '15m': '15m', '30m': '30m',
@@ -24,14 +21,21 @@ export function subscribeTicker(symbol: string): void {
   wsManager.add(`binance-ticker-${symbol}`, {
     url: `${BINANCE_WS}/${stream}`,
     onMessage: (data) => {
-      const ticker = normalizeBinanceTicker(data as Record<string, unknown>);
-      useMarketStore.getState().updateTicker(ticker);
+      const record = data as Record<string, unknown>;
+      if (record.e === '24hrTicker') {
+        const ticker = normalizeBinanceTicker(record);
+        useMarketStore.getState().updateTicker(ticker);
+      }
     },
     onOpen: () => {
+      console.log(`[Binance WS] Ticker connected: ${symbol}`);
       useMarketStore.getState().setConnectionStatus('binance', 'connected');
     },
     onClose: () => {
       useMarketStore.getState().setConnectionStatus('binance', 'disconnected');
+    },
+    onError: (err) => {
+      console.error(`[Binance WS] Ticker error: ${symbol}`, err);
     },
   });
 }
@@ -41,15 +45,18 @@ export function subscribeKline(symbol: string, timeframe: Timeframe): void {
   wsManager.add(`binance-kline-${symbol}-${timeframe}`, {
     url: `${BINANCE_WS}/${stream}`,
     onMessage: (data) => {
-      const candle = normalizeBinanceKline(data as Record<string, unknown>);
-      const key = `${symbol}:${timeframe}`;
-      useMarketStore.getState().appendCandle(key, candle);
+      const record = data as Record<string, unknown>;
+      if (record.e === 'kline') {
+        const candle = normalizeBinanceKline(record);
+        const key = `${symbol}:${timeframe}`;
+        useMarketStore.getState().appendCandle(key, candle);
+      }
     },
   });
 }
 
-export function subscribeOrderbook(symbol: string, depth: number = 20): void {
-  const stream = `${symbol.toLowerCase()}@depth${depth}@100ms`;
+export function subscribeOrderbook(symbol: string): void {
+  const stream = `${symbol.toLowerCase()}@depth20@1000ms`;
   wsManager.add(`binance-orderbook-${symbol}`, {
     url: `${BINANCE_WS}/${stream}`,
     onMessage: (data) => {
@@ -65,8 +72,11 @@ export function subscribeTrades(symbol: string): void {
   wsManager.add(`binance-trades-${symbol}`, {
     url: `${BINANCE_WS}/${stream}`,
     onMessage: (data) => {
-      const trade = normalizeBinanceTrade(data as Record<string, unknown>);
-      useMarketStore.getState().addTrade(trade);
+      const record = data as Record<string, unknown>;
+      if (record.e === 'trade') {
+        const trade = normalizeBinanceTrade(record);
+        useMarketStore.getState().addTrade(trade);
+      }
     },
   });
 }
@@ -76,8 +86,14 @@ export async function fetchKlines(
   timeframe: Timeframe,
   limit: number = 500
 ): Promise<Candle[]> {
-  const url = `${BINANCE_REST}/klines?symbol=${symbol}&interval=${TF_MAP[timeframe]}&limit=${limit}`;
+  // Use Vercel serverless proxy (avoids CORS) or direct Binance API
+  const isVercel = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+  const url = isVercel
+    ? `/api/klines?symbol=${symbol}&interval=${TF_MAP[timeframe]}&limit=${limit}`
+    : `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${TF_MAP[timeframe]}&limit=${limit}`;
+
   const res = await fetch(url);
+  if (!res.ok) throw new Error(`Klines fetch failed: ${res.status}`);
   const data = (await res.json()) as (string | number)[][];
   return data.map((k) => ({
     time: Math.floor((k[0] as number) / 1000),
@@ -90,17 +106,25 @@ export async function fetchKlines(
 }
 
 export async function fetchFundingRates(): Promise<void> {
-  const url = `${BINANCE_FAPI_REST}/premiumIndex`;
-  const res = await fetch(url);
-  const data = (await res.json()) as Record<string, unknown>[];
-  const store = useMarketStore.getState();
-  for (const item of data) {
-    store.updateFundingRate({
-      symbol: item.symbol as string,
-      rate: parseFloat(item.lastFundingRate as string),
-      nextFundingTime: item.nextFundingTime as number,
-      exchange: 'binance',
-    });
+  try {
+    const isVercel = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+    const url = isVercel
+      ? '/api/funding-rates'
+      : 'https://fapi.binance.com/fapi/v1/premiumIndex';
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = (await res.json()) as Record<string, unknown>[];
+    const store = useMarketStore.getState();
+    for (const item of data.slice(0, 20)) {
+      store.updateFundingRate({
+        symbol: item.symbol as string,
+        rate: parseFloat(item.lastFundingRate as string),
+        nextFundingTime: item.nextFundingTime as number,
+        exchange: 'binance',
+      });
+    }
+  } catch (err) {
+    console.error('[Binance] Funding rates error:', err);
   }
 }
 

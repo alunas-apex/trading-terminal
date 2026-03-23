@@ -1,8 +1,6 @@
 import type { PredictionMarket } from '../../types/market';
 import { useMarketStore } from '../../stores/marketStore';
 
-const POLYMARKET_API = 'https://gamma-api.polymarket.com';
-
 interface PolymarketEvent {
   id: string;
   title: string;
@@ -20,8 +18,14 @@ interface PolymarketMarketData {
 }
 
 export async function fetchActiveMarkets(limit: number = 20): Promise<PredictionMarket[]> {
-  const url = `${POLYMARKET_API}/events?closed=false&limit=${limit}&order=volume&ascending=false`;
+  // Use Vercel serverless proxy to avoid CORS
+  const isVercel = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+  const url = isVercel
+    ? `/api/prediction-markets?limit=${limit}`
+    : `https://gamma-api.polymarket.com/events?closed=false&limit=${limit}&order=volume&ascending=false`;
+
   const res = await fetch(url);
+  if (!res.ok) throw new Error(`Polymarket fetch failed: ${res.status}`);
   const events = (await res.json()) as PolymarketEvent[];
 
   const markets: PredictionMarket[] = [];
@@ -49,6 +53,10 @@ export async function fetchActiveMarkets(limit: number = 20): Promise<Prediction
 }
 
 export async function fetchAndStoreMarkets(): Promise<void> {
-  const markets = await fetchActiveMarkets();
-  useMarketStore.getState().setPredictionMarkets(markets);
+  try {
+    const markets = await fetchActiveMarkets();
+    useMarketStore.getState().setPredictionMarkets(markets);
+  } catch (err) {
+    console.error('[Polymarket] Error:', err);
+  }
 }

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -15,18 +15,37 @@ import { useSettingsStore } from './stores/settingsStore';
 import { subscribeTicker, subscribeKline, subscribeOrderbook, subscribeTrades, fetchKlines, fetchFundingRates } from './services/api/binance';
 import { fetchAndStoreMarkets } from './services/api/polymarket';
 import { fetchTopCoins } from './services/api/coingecko';
+import { wsManager } from './services/websocket';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const DEFAULT_LAYOUTS = {
   lg: [
-    { i: 'chart', x: 0, y: 0, w: 8, h: 12 },
-    { i: 'watchlist', x: 8, y: 0, w: 2, h: 6 },
-    { i: 'ai', x: 10, y: 0, w: 2, h: 12 },
-    { i: 'orderbook', x: 0, y: 12, w: 4, h: 8 },
-    { i: 'portfolio', x: 4, y: 12, w: 4, h: 8 },
-    { i: 'strategies', x: 8, y: 6, w: 2, h: 6 },
-    { i: 'news', x: 0, y: 20, w: 12, h: 4 },
+    { i: 'chart', x: 0, y: 0, w: 8, h: 14, minH: 8, minW: 4 },
+    { i: 'watchlist', x: 8, y: 0, w: 2, h: 7, minH: 4, minW: 2 },
+    { i: 'ai', x: 10, y: 0, w: 2, h: 14, minH: 6, minW: 2 },
+    { i: 'orderbook', x: 0, y: 14, w: 4, h: 10, minH: 6, minW: 2 },
+    { i: 'portfolio', x: 4, y: 14, w: 4, h: 10, minH: 6, minW: 2 },
+    { i: 'strategies', x: 8, y: 7, w: 2, h: 7, minH: 4, minW: 2 },
+    { i: 'news', x: 0, y: 24, w: 12, h: 3, minH: 2, minW: 4 },
+  ],
+  md: [
+    { i: 'chart', x: 0, y: 0, w: 7, h: 12, minH: 8 },
+    { i: 'watchlist', x: 7, y: 0, w: 3, h: 6 },
+    { i: 'ai', x: 7, y: 6, w: 3, h: 6 },
+    { i: 'orderbook', x: 0, y: 12, w: 5, h: 8 },
+    { i: 'portfolio', x: 5, y: 12, w: 5, h: 8 },
+    { i: 'strategies', x: 0, y: 20, w: 5, h: 6 },
+    { i: 'news', x: 0, y: 26, w: 10, h: 3 },
+  ],
+  sm: [
+    { i: 'chart', x: 0, y: 0, w: 6, h: 10 },
+    { i: 'watchlist', x: 0, y: 10, w: 3, h: 6 },
+    { i: 'orderbook', x: 3, y: 10, w: 3, h: 6 },
+    { i: 'portfolio', x: 0, y: 16, w: 6, h: 6 },
+    { i: 'ai', x: 0, y: 22, w: 6, h: 6 },
+    { i: 'strategies', x: 0, y: 28, w: 6, h: 5 },
+    { i: 'news', x: 0, y: 33, w: 6, h: 3 },
   ],
 };
 
@@ -39,92 +58,100 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  // Subscribe to live data on mount and when active symbol changes
+  // Subscribe to live data
   useEffect(() => {
+    console.log(`[App] Subscribing to ${activeSymbol} ${activeTimeframe}`);
+
+    // Close previous connections
+    wsManager.closeAll();
+
+    // WebSocket streams (direct to Binance — works from browser)
     subscribeTicker(activeSymbol);
     subscribeKline(activeSymbol, activeTimeframe);
     subscribeOrderbook(activeSymbol);
     subscribeTrades(activeSymbol);
 
-    // Fetch initial candle history
+    // REST fetches (via Vercel proxy or direct)
     fetchKlines(activeSymbol, activeTimeframe).then((candles) => {
+      console.log(`[App] Loaded ${candles.length} candles for ${activeSymbol}`);
       useMarketStore.getState().setCandles(`${activeSymbol}:${activeTimeframe}`, candles);
-    }).catch(console.error);
+    }).catch((err) => console.error('[App] Klines error:', err));
 
-    // Fetch funding rates
-    fetchFundingRates().catch(console.error);
+    fetchFundingRates().catch((err) => console.error('[App] Funding rates error:', err));
+    fetchAndStoreMarkets().catch((err) => console.error('[App] Prediction markets error:', err));
+    fetchTopCoins().catch((err) => console.error('[App] CoinGecko error:', err));
 
-    // Fetch prediction markets
-    fetchAndStoreMarkets().catch(console.error);
-
-    // Fetch CoinGecko data for broader coverage
-    fetchTopCoins().catch(console.error);
-
-    // Refresh prediction markets and funding rates periodically
+    // Refresh REST data periodically
     const interval = setInterval(() => {
       fetchAndStoreMarkets().catch(console.error);
       fetchFundingRates().catch(console.error);
       fetchTopCoins().catch(console.error);
     }, 60_000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      wsManager.closeAll();
+    };
   }, [activeSymbol, activeTimeframe]);
 
   return (
     <div className="app">
       <Header />
-      <ResponsiveGridLayout
-        className="layout"
-        layouts={DEFAULT_LAYOUTS}
-        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-        cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-        rowHeight={30}
-        draggableHandle=".panel-header"
-        compactType="vertical"
-      >
-        <div key="chart" className="panel">
-          <div className="panel-header">Chart — {activeSymbol} {activeTimeframe}</div>
-          <div className="panel-body">
-            <TradingChart />
+      <div className="grid-container">
+        <ResponsiveGridLayout
+          className="layout"
+          layouts={DEFAULT_LAYOUTS}
+          breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+          cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+          rowHeight={28}
+          draggableHandle=".panel-header"
+          compactType="vertical"
+          margin={[6, 6]}
+        >
+          <div key="chart" className="panel">
+            <div className="panel-header">Chart — {activeSymbol} {activeTimeframe}</div>
+            <div className="panel-body chart-body">
+              <TradingChart />
+            </div>
           </div>
-        </div>
-        <div key="watchlist" className="panel">
-          <div className="panel-header">Watchlist</div>
-          <div className="panel-body">
-            <Watchlist />
+          <div key="watchlist" className="panel">
+            <div className="panel-header">Watchlist</div>
+            <div className="panel-body">
+              <Watchlist />
+            </div>
           </div>
-        </div>
-        <div key="ai" className="panel">
-          <div className="panel-header">AI Coach</div>
-          <div className="panel-body">
-            <AiCoach />
+          <div key="ai" className="panel">
+            <div className="panel-header">AI Coach</div>
+            <div className="panel-body">
+              <AiCoach />
+            </div>
           </div>
-        </div>
-        <div key="orderbook" className="panel">
-          <div className="panel-header">Orderbook</div>
-          <div className="panel-body">
-            <Orderbook />
+          <div key="orderbook" className="panel">
+            <div className="panel-header">Orderbook</div>
+            <div className="panel-body">
+              <Orderbook />
+            </div>
           </div>
-        </div>
-        <div key="portfolio" className="panel">
-          <div className="panel-header">Portfolio</div>
-          <div className="panel-body">
-            <Portfolio />
+          <div key="portfolio" className="panel">
+            <div className="panel-header">Portfolio</div>
+            <div className="panel-body">
+              <Portfolio />
+            </div>
           </div>
-        </div>
-        <div key="strategies" className="panel">
-          <div className="panel-header">Strategies</div>
-          <div className="panel-body">
-            <StrategyPanel />
+          <div key="strategies" className="panel">
+            <div className="panel-header">Strategies</div>
+            <div className="panel-body">
+              <StrategyPanel />
+            </div>
           </div>
-        </div>
-        <div key="news" className="panel">
-          <div className="panel-header">News &amp; Alerts</div>
-          <div className="panel-body">
-            <NewsFeed />
+          <div key="news" className="panel">
+            <div className="panel-header">News & Alerts</div>
+            <div className="panel-body">
+              <NewsFeed />
+            </div>
           </div>
-        </div>
-      </ResponsiveGridLayout>
+        </ResponsiveGridLayout>
+      </div>
     </div>
   );
 }

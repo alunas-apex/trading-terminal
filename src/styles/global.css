@@ -21,7 +21,7 @@
   --red-dim: rgba(239, 68, 68, 0.15);
   --yellow: #eab308;
   --blue: #3b82f6;
-  --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+  --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -38,6 +38,7 @@
 
 html, body, #root {
   height: 100%;
+  width: 100%;
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -50,10 +51,14 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  width: 100vw;
+  overflow: hidden;
 }
 
-.layout {
+.grid-container {
   flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 4px;
 }
 
@@ -64,6 +69,7 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
 }
 
 .panel-header {
@@ -87,7 +93,13 @@ html, body, #root {
 .panel-body {
   flex: 1;
   overflow: auto;
-  padding: 0;
+  min-height: 0;
+}
+
+/* Chart needs explicit positioning for lightweight-charts */
+.chart-body {
+  position: relative;
+  overflow: hidden;
 }
 
 /* Scrollbar */
@@ -110,6 +122,16 @@ html, body, #root {
 }
 
 /* Grid layout overrides */
+.react-grid-item {
+  transition: none !important;
+}
+
+.react-grid-item.react-draggable-dragging {
+  transition: none !important;
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
 .react-grid-placeholder {
   background: var(--accent) !important;
   opacity: 0.15 !important;
