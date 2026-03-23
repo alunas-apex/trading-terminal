@@ -10,8 +10,10 @@ import { Portfolio } from './components/portfolio/Portfolio';
 import { NewsFeed } from './components/news/NewsFeed';
 import { AiCoach } from './components/ai/AiCoach';
 import { StrategyPanel } from './components/controls/StrategyPanel';
+import { AlertManager } from './components/controls/AlertManager';
 import { useMarketStore } from './stores/marketStore';
 import { useSettingsStore } from './stores/settingsStore';
+import { useAlertChecker } from './hooks/useAlertChecker';
 import { fetchKlines, fetchTicker, fetchOrderbook, fetchFundingRates, fetchAllTickers } from './services/api/bybit';
 import { fetchAndStoreMarkets } from './services/api/polymarket';
 import { fetchTopCoins } from './services/api/coingecko';
@@ -25,7 +27,8 @@ const LAYOUTS = {
     { i: 'ai', x: 10, y: 0, w: 2, h: 14, minH: 6, minW: 2 },
     { i: 'orderbook', x: 0, y: 14, w: 4, h: 10, minH: 6, minW: 2 },
     { i: 'portfolio', x: 4, y: 14, w: 4, h: 10, minH: 6, minW: 2 },
-    { i: 'strategies', x: 8, y: 7, w: 2, h: 7, minH: 4, minW: 2 },
+    { i: 'strategies', x: 8, y: 7, w: 2, h: 4, minH: 3, minW: 2 },
+    { i: 'alerts', x: 8, y: 11, w: 2, h: 3, minH: 3, minW: 2 },
     { i: 'news', x: 0, y: 24, w: 12, h: 3, minH: 2, minW: 4 },
   ],
   md: [
@@ -34,7 +37,8 @@ const LAYOUTS = {
     { i: 'ai', x: 7, y: 6, w: 3, h: 6 },
     { i: 'orderbook', x: 0, y: 12, w: 5, h: 8 },
     { i: 'portfolio', x: 5, y: 12, w: 5, h: 8 },
-    { i: 'strategies', x: 0, y: 20, w: 5, h: 6 },
+    { i: 'strategies', x: 0, y: 20, w: 5, h: 4 },
+    { i: 'alerts', x: 5, y: 20, w: 5, h: 4 },
     { i: 'news', x: 0, y: 26, w: 10, h: 3 },
   ],
   sm: [
@@ -43,7 +47,8 @@ const LAYOUTS = {
     { i: 'orderbook', x: 3, y: 10, w: 3, h: 6 },
     { i: 'portfolio', x: 0, y: 16, w: 6, h: 6 },
     { i: 'ai', x: 0, y: 22, w: 6, h: 6 },
-    { i: 'strategies', x: 0, y: 28, w: 6, h: 5 },
+    { i: 'strategies', x: 0, y: 28, w: 3, h: 5 },
+    { i: 'alerts', x: 3, y: 28, w: 3, h: 5 },
     { i: 'news', x: 0, y: 33, w: 6, h: 3 },
   ],
 };
@@ -63,6 +68,9 @@ export default function App() {
   const theme = useSettingsStore((s) => s.theme);
   const indicators = useSettingsStore((s) => s.indicators);
   const toggleIndicator = useSettingsStore((s) => s.toggleIndicator);
+
+  // Run alert checker against live ticker data
+  useAlertChecker();
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -173,6 +181,10 @@ export default function App() {
           <div key="strategies" className="panel">
             <div className="panel-header">Strategies</div>
             <div className="panel-body"><StrategyPanel /></div>
+          </div>
+          <div key="alerts" className="panel">
+            <div className="panel-header">Price Alerts</div>
+            <div className="panel-body"><AlertManager /></div>
           </div>
           <div key="news" className="panel">
             <div className="panel-header">News & Alerts</div>
