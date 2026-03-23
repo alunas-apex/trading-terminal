@@ -8,7 +8,6 @@ interface NewsItem {
   title: string;
   source: string;
   timestamp: number;
-  url?: string;
 }
 
 export function NewsFeed() {
@@ -16,10 +15,9 @@ export function NewsFeed() {
   const alerts = usePortfolioStore((s) => s.alerts);
   const tickers = useMarketStore((s) => s.tickers);
 
-  // Generate market-event "news" from live ticker data
   useEffect(() => {
     const items: NewsItem[] = [];
-    for (const [symbol, ticker] of tickers.entries()) {
+    for (const [symbol, ticker] of Object.entries(tickers)) {
       if (Math.abs(ticker.changePercent24h) > 5) {
         items.push({
           id: `move-${symbol}`,
@@ -36,7 +34,6 @@ export function NewsFeed() {
 
   return (
     <div style={{ display: 'flex', gap: '16px', padding: '8px 12px', fontSize: '11px', overflow: 'auto' }}>
-      {/* News ticker */}
       <div style={{ flex: 1, display: 'flex', gap: '16px', overflow: 'hidden' }}>
         {news.length > 0 ? (
           news.map((item) => (
@@ -53,7 +50,6 @@ export function NewsFeed() {
         )}
       </div>
 
-      {/* Alerts */}
       {activeAlerts.length > 0 && (
         <div style={{ display: 'flex', gap: '8px', borderLeft: '1px solid var(--border)', paddingLeft: '16px' }}>
           {activeAlerts.slice(0, 3).map((alert) => (

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMarketStore } from '../../stores/marketStore';
+import type { Ticker } from '../../types/market';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -17,7 +18,7 @@ export function AiCoach() {
   ]);
   const [input, setInput] = useState('');
   const activeSymbol = useMarketStore((s) => s.activeSymbol);
-  const ticker = useMarketStore((s) => s.tickers.get(activeSymbol));
+  const ticker = useMarketStore((s) => s.tickers[activeSymbol]);
 
   const handleSend = () => {
     if (!input.trim()) return;
@@ -25,7 +26,6 @@ export function AiCoach() {
     const userMsg: Message = { role: 'user', content: input, timestamp: Date.now() };
     setMessages((prev) => [...prev, userMsg]);
 
-    // Phase 1: Basic auto-response with market context
     const response = generateBasicResponse(input, activeSymbol, ticker);
     const assistantMsg: Message = { role: 'assistant', content: response, timestamp: Date.now() };
 
@@ -46,7 +46,6 @@ export function AiCoach() {
             borderRadius: '6px',
             background: msg.role === 'user' ? 'var(--accent)' : msg.role === 'system' ? 'var(--bg-secondary)' : 'var(--bg-hover)',
             color: msg.role === 'user' ? '#fff' : 'var(--text-primary)',
-            alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
             maxWidth: '90%',
           }}>
             {msg.role === 'assistant' && (
@@ -57,39 +56,24 @@ export function AiCoach() {
         ))}
       </div>
 
-      <div style={{
-        display: 'flex',
-        gap: '4px',
-        padding: '8px',
-        borderTop: '1px solid var(--border)',
-      }}>
+      <div style={{ display: 'flex', gap: '4px', padding: '8px', borderTop: '1px solid var(--border)' }}>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder="Ask about markets..."
           style={{
-            flex: 1,
-            padding: '6px 8px',
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border)',
-            borderRadius: '4px',
-            color: 'var(--text-primary)',
-            fontSize: '11px',
-            outline: 'none',
+            flex: 1, padding: '6px 8px', background: 'var(--bg-secondary)',
+            border: '1px solid var(--border)', borderRadius: '4px',
+            color: 'var(--text-primary)', fontSize: '11px', outline: 'none',
           }}
         />
         <button
           onClick={handleSend}
           style={{
-            padding: '6px 12px',
-            background: 'var(--accent)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '11px',
-            fontWeight: 600,
+            padding: '6px 12px', background: 'var(--accent)', color: '#fff',
+            border: 'none', borderRadius: '4px', cursor: 'pointer',
+            fontSize: '11px', fontWeight: 600,
           }}
         >
           Send
@@ -99,11 +83,7 @@ export function AiCoach() {
   );
 }
 
-function generateBasicResponse(
-  input: string,
-  symbol: string,
-  ticker?: { price: number; changePercent24h: number; high24h: number; low24h: number; volume24h: number }
-): string {
+function generateBasicResponse(input: string, symbol: string, ticker?: Ticker): string {
   const lower = input.toLowerCase();
 
   if (lower.includes('price') || lower.includes('how') || lower.includes('what')) {
@@ -114,11 +94,11 @@ function generateBasicResponse(
   }
 
   if (lower.includes('buy') || lower.includes('sell') || lower.includes('trade') || lower.includes('entry')) {
-    return `Trade suggestions will be available in Phase 3 with Claude AI integration. For now, I recommend analyzing the chart with RSI and MACD indicators enabled.`;
+    return 'Trade suggestions will be available in Phase 3 with Claude AI integration. For now, analyze the chart with RSI and MACD indicators enabled.';
   }
 
   if (lower.includes('strategy') || lower.includes('strat')) {
-    return `Supported strategies (coming Phase 2-3):\n- VWAP Reversion\n- RSI Mean Reversion\n- Funding Rate Arb\n- Options Wheel\n- Prediction Market Arb\n\nToggle them in the Strategy Panel.`;
+    return 'Supported strategies (coming Phase 2-3):\n- VWAP Reversion\n- RSI Mean Reversion\n- Funding Rate Arb\n- Options Wheel\n- Prediction Market Arb\n\nToggle them in the Strategy Panel.';
   }
 
   return `I'm monitoring ${symbol} for you. Full AI coaching (analysis, signals, trade management) arrives in Phase 3.\n\nTry asking: "what's the price?" or "what strategies are available?"`;
