@@ -15,22 +15,15 @@ export function Header() {
   const positions = usePortfolioStore((s) => s.positions);
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
-  const connectionStatus = useMarketStore((s) => s.connectionStatus);
 
   const totalPnl = positions.reduce((sum, p) => sum + p.pnl, 0);
   const pnlColor = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
-  const connectedCount = Object.values(connectionStatus).filter((s) => s === 'connected').length;
 
   return (
     <header style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '16px',
-      padding: '8px 16px',
-      background: 'var(--bg-secondary)',
-      borderBottom: '1px solid var(--border)',
-      flexShrink: 0,
-      flexWrap: 'wrap',
+      display: 'flex', alignItems: 'center', gap: '16px', padding: '8px 16px',
+      background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)',
+      flexShrink: 0, flexWrap: 'wrap',
     }}>
       <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
         TERMINAL
@@ -43,8 +36,7 @@ export function Header() {
             ${formatPrice(ticker.price)}
           </span>
           <span style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '12px',
+            fontFamily: 'var(--font-mono)', fontSize: '12px',
             color: ticker.changePercent24h >= 0 ? 'var(--green)' : 'var(--red)',
           }}>
             {formatPercent(ticker.changePercent24h)}
@@ -60,14 +52,10 @@ export function Header() {
             key={tf}
             onClick={() => setActiveTimeframe(tf)}
             style={{
-              padding: '3px 8px',
-              fontSize: '11px',
-              fontFamily: 'var(--font-mono)',
+              padding: '3px 8px', fontSize: '11px', fontFamily: 'var(--font-mono)',
               background: tf === activeTimeframe ? 'var(--accent)' : 'transparent',
               color: tf === activeTimeframe ? '#fff' : 'var(--text-secondary)',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
+              border: 'none', borderRadius: '4px', cursor: 'pointer',
             }}
           >
             {tf}
@@ -80,9 +68,7 @@ export function Header() {
       <div style={{ display: 'flex', gap: '16px', alignItems: 'center', fontSize: '12px' }}>
         <div>
           <span style={{ color: 'var(--text-muted)' }}>Balance </span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-            ${formatPrice(balance)}
-          </span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>${formatPrice(balance)}</span>
         </div>
         <div>
           <span style={{ color: 'var(--text-muted)' }}>P&L </span>
@@ -92,8 +78,8 @@ export function Header() {
         </div>
         <div style={{
           width: 8, height: 8, borderRadius: '50%',
-          background: connectedCount > 0 ? 'var(--green)' : 'var(--red)',
-        }} title={`${connectedCount} source(s) connected`} />
+          background: ticker ? 'var(--green)' : 'var(--yellow)',
+        }} title={ticker ? 'Data connected' : 'Connecting...'} />
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           style={{

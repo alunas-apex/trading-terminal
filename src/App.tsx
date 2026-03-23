@@ -12,10 +12,9 @@ import { AiCoach } from './components/ai/AiCoach';
 import { StrategyPanel } from './components/controls/StrategyPanel';
 import { useMarketStore } from './stores/marketStore';
 import { useSettingsStore } from './stores/settingsStore';
-import { subscribeTicker, subscribeKline, subscribeOrderbook, subscribeTrades, fetchKlines, fetchFundingRates } from './services/api/binance';
+import { fetchKlines, fetchTicker, fetchOrderbook, fetchFundingRates, fetchAllTickers } from './services/api/bybit';
 import { fetchAndStoreMarkets } from './services/api/polymarket';
 import { fetchTopCoins } from './services/api/coingecko';
-import { wsManager } from './services/websocket';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -49,6 +48,8 @@ const LAYOUTS = {
   ],
 };
 
+const WATCHLIST_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
+
 export default function App() {
   const activeSymbol = useMarketStore((s) => s.activeSymbol);
   const activeTimeframe = useMarketStore((s) => s.activeTimeframe);
@@ -61,10 +62,7 @@ export default function App() {
   useEffect(() => {
     console.log(`[App] Init data for ${activeSymbol} ${activeTimeframe}`);
 
-    // Clean up any previous WS connections
-    wsManager.closeAll();
-
-    // 1. Fetch historical candles via REST (most important for chart)
+    // 1. Fetch chart candles (REST via Vercel proxy → Bybit)
     fetchKlines(activeSymbol, activeTimeframe)
       .then((candles) => {
         console.log(`[App] Loaded ${candles.length} candles`);
@@ -72,31 +70,36 @@ export default function App() {
       })
       .catch((err) => console.error('[App] Klines failed:', err));
 
-    // 2. Start WebSocket streams for live updates
-    try {
-      subscribeTicker(activeSymbol);
-      subscribeKline(activeSymbol, activeTimeframe);
-      subscribeOrderbook(activeSymbol);
-      subscribeTrades(activeSymbol);
-    } catch (err) {
-      console.error('[App] WS subscription error:', err);
-    }
+    // 2. Fetch ticker for active symbol
+    fetchTicker(activeSymbol);
 
-    // 3. Fetch supplementary data
+    // 3. Fetch orderbook
+    fetchOrderbook(activeSymbol);
+
+    // 4. Fetch all watchlist tickers
+    fetchAllTickers(WATCHLIST_SYMBOLS);
+
+    // 5. Supplementary data
     fetchFundingRates();
     fetchAndStoreMarkets();
     fetchTopCoins();
 
-    // 4. Periodic refresh for REST data
-    const interval = setInterval(() => {
+    // 6. Poll for updates (REST polling since Bybit WS also geo-blocks from some IPs)
+    const fastPoll = setInterval(() => {
+      fetchTicker(activeSymbol);
+      fetchOrderbook(activeSymbol);
+    }, 3000); // 3s for ticker + orderbook
+
+    const slowPoll = setInterval(() => {
+      fetchAllTickers(WATCHLIST_SYMBOLS);
       fetchFundingRates();
       fetchAndStoreMarkets();
       fetchTopCoins();
-    }, 60_000);
+    }, 30000); // 30s for supplementary
 
     return () => {
-      clearInterval(interval);
-      wsManager.closeAll();
+      clearInterval(fastPoll);
+      clearInterval(slowPoll);
     };
   }, [activeSymbol, activeTimeframe]);
 
@@ -115,7 +118,7 @@ export default function App() {
           margin={[6, 6]}
         >
           <div key="chart" className="panel">
-            <div className="panel-header">Chart — {activeSymbol} {activeTimeframe}</div>
+            <div className="panel-header">Chart \u2014 {activeSymbol} {activeTimeframe}</div>
             <div className="panel-body panel-body--chart">
               <TradingChart />
             </div>
