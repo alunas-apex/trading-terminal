@@ -40,6 +40,11 @@ const DEFAULT_WATCHLIST: WatchlistItem[] = [
   { symbol: 'SOLUSDT', name: 'Solana', assetClass: 'crypto', source: 'binance' },
   { symbol: 'BNBUSDT', name: 'BNB', assetClass: 'crypto', source: 'binance' },
   { symbol: 'XRPUSDT', name: 'XRP', assetClass: 'crypto', source: 'binance' },
+  { symbol: 'DOGEUSDT', name: 'Dogecoin', assetClass: 'crypto', source: 'binance' },
+  { symbol: 'ADAUSDT', name: 'Cardano', assetClass: 'crypto', source: 'binance' },
+  { symbol: 'AVAXUSDT', name: 'Avalanche', assetClass: 'crypto', source: 'binance' },
+  { symbol: 'LINKUSDT', name: 'Chainlink', assetClass: 'crypto', source: 'binance' },
+  { symbol: 'DOTUSDT', name: 'Polkadot', assetClass: 'crypto', source: 'binance' },
 ];
 
 export const useMarketStore = create<MarketState>((set) => ({
