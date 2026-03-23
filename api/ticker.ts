@@ -1,35 +1,55 @@
 export const config = { runtime: 'edge' };
 
+// Use CoinGecko for tickers — reliable, no geo-block
 export default async function handler(req: Request) {
   const url = new URL(req.url);
   const symbol = url.searchParams.get('symbol') || 'BTCUSDT';
 
-  const bybitUrl = `https://api.bybit.com/v5/market/tickers?category=spot&symbol=${symbol}`;
-  const res = await fetch(bybitUrl);
-  const json = await res.json() as { retCode: number; result?: { list?: Record<string, string>[] } };
+  const coinMap: Record<string, string> = {
+    BTCUSDT: 'bitcoin', ETHUSDT: 'ethereum', SOLUSDT: 'solana',
+    BNBUSDT: 'binancecoin', XRPUSDT: 'ripple', DOGEUSDT: 'dogecoin',
+    ADAUSDT: 'cardano', AVAXUSDT: 'avalanche-2', DOTUSDT: 'polkadot',
+  };
+  const coinId = coinMap[symbol] || 'bitcoin';
 
-  if (json.retCode !== 0 || !json.result?.list?.[0]) {
+  try {
+    const cgUrl = `https://api.coingecko.com/api/v3/coins/${coinId}?localization=false&tickers=false&community_data=false&developer_data=false`;
+    const res = await fetch(cgUrl);
+    if (!res.ok) {
+      return new Response(JSON.stringify(null), {
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
+    }
+
+    const data = await res.json() as Record<string, unknown>;
+    const md = data.market_data as Record<string, unknown> | undefined;
+    if (!md) {
+      return new Response(JSON.stringify(null), {
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
+    }
+
+    const ticker = {
+      symbol,
+      price: (md.current_price as Record<string, number>)?.usd ?? 0,
+      change24h: (md.price_change_24h_in_currency as Record<string, number>)?.usd ?? 0,
+      changePercent24h: (md.price_change_percentage_24h as number) ?? 0,
+      high24h: (md.high_24h as Record<string, number>)?.usd ?? 0,
+      low24h: (md.low_24h as Record<string, number>)?.usd ?? 0,
+      volume24h: (md.total_volume as Record<string, number>)?.usd ?? 0,
+    };
+
+    return new Response(JSON.stringify(ticker), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 's-maxage=15, stale-while-revalidate=30',
+      },
+    });
+  } catch (err) {
     return new Response(JSON.stringify(null), {
+      status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     });
   }
-
-  const t = json.result.list[0];
-  const ticker = {
-    symbol: t.symbol,
-    price: parseFloat(t.lastPrice),
-    change24h: parseFloat(t.price24hPcnt) * parseFloat(t.prevPrice24h),
-    changePercent24h: parseFloat(t.price24hPcnt) * 100,
-    high24h: parseFloat(t.highPrice24h),
-    low24h: parseFloat(t.lowPrice24h),
-    volume24h: parseFloat(t.volume24h),
-  };
-
-  return new Response(JSON.stringify(ticker), {
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Cache-Control': 's-maxage=5, stale-while-revalidate=10',
-    },
-  });
 }

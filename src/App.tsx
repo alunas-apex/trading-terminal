@@ -62,7 +62,7 @@ export default function App() {
   useEffect(() => {
     console.log(`[App] Init data for ${activeSymbol} ${activeTimeframe}`);
 
-    // 1. Fetch chart candles (REST via Vercel proxy → Bybit)
+    // 1. Fetch chart candles
     fetchKlines(activeSymbol, activeTimeframe)
       .then((candles) => {
         console.log(`[App] Loaded ${candles.length} candles`);
@@ -70,35 +70,31 @@ export default function App() {
       })
       .catch((err) => console.error('[App] Klines failed:', err));
 
-    // 2. Fetch ticker for active symbol
+    // 2. Fetch ticker + orderbook for active symbol
     fetchTicker(activeSymbol);
-
-    // 3. Fetch orderbook
     fetchOrderbook(activeSymbol);
 
-    // 4. Fetch all watchlist tickers
+    // 3. Fetch all watchlist tickers + supplementary data
     fetchAllTickers(WATCHLIST_SYMBOLS);
-
-    // 5. Supplementary data
     fetchFundingRates();
     fetchAndStoreMarkets();
     fetchTopCoins();
 
-    // 6. Poll for updates (REST polling since Bybit WS also geo-blocks from some IPs)
-    const fastPoll = setInterval(() => {
+    // 4. Poll — 15s for active data, 60s for supplementary
+    const activePoll = setInterval(() => {
       fetchTicker(activeSymbol);
       fetchOrderbook(activeSymbol);
-    }, 3000); // 3s for ticker + orderbook
+    }, 15000);
 
     const slowPoll = setInterval(() => {
       fetchAllTickers(WATCHLIST_SYMBOLS);
       fetchFundingRates();
       fetchAndStoreMarkets();
       fetchTopCoins();
-    }, 30000); // 30s for supplementary
+    }, 60000);
 
     return () => {
-      clearInterval(fastPoll);
+      clearInterval(activePoll);
       clearInterval(slowPoll);
     };
   }, [activeSymbol, activeTimeframe]);
