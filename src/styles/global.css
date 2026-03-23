@@ -85,6 +85,10 @@ html, body, #root {
   cursor: grab;
   user-select: none;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .panel-header:active { cursor: grabbing; }
@@ -99,6 +103,92 @@ html, body, #root {
 .panel-body--chart {
   position: relative;
   overflow: hidden;
+}
+
+/* Indicator quick toggles in chart panel header */
+.indicator-quick-toggles {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.indicator-quick-btn {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  letter-spacing: 0.3px;
+  padding: 1px 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.indicator-quick-btn:hover {
+  color: var(--text-secondary);
+  border-color: var(--text-muted);
+}
+
+.indicator-quick-btn--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.indicator-quick-btn--on:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #fff;
+}
+
+/* Indicator toggles panel */
+.indicator-toggles {
+  padding: 8px 10px;
+}
+
+.indicator-toggles__title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.indicator-toggles__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.indicator-toggles__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 3px 0;
+}
+
+.indicator-toggles__item input[type='checkbox'] {
+  accent-color: var(--accent);
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
+
+.indicator-toggles__label {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+}
+
+.indicator-toggles__label--active {
+  color: var(--text-primary);
 }
 
 /* Scrollbar */
