@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -19,7 +19,7 @@ import { wsManager } from './services/websocket';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
-const DEFAULT_LAYOUTS = {
+const LAYOUTS = {
   lg: [
     { i: 'chart', x: 0, y: 0, w: 8, h: 14, minH: 8, minW: 4 },
     { i: 'watchlist', x: 8, y: 0, w: 2, h: 7, minH: 4, minW: 2 },
@@ -30,7 +30,7 @@ const DEFAULT_LAYOUTS = {
     { i: 'news', x: 0, y: 24, w: 12, h: 3, minH: 2, minW: 4 },
   ],
   md: [
-    { i: 'chart', x: 0, y: 0, w: 7, h: 12, minH: 8 },
+    { i: 'chart', x: 0, y: 0, w: 7, h: 12 },
     { i: 'watchlist', x: 7, y: 0, w: 3, h: 6 },
     { i: 'ai', x: 7, y: 6, w: 3, h: 6 },
     { i: 'orderbook', x: 0, y: 12, w: 5, h: 8 },
@@ -58,34 +58,40 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  // Subscribe to live data
   useEffect(() => {
-    console.log(`[App] Subscribing to ${activeSymbol} ${activeTimeframe}`);
+    console.log(`[App] Init data for ${activeSymbol} ${activeTimeframe}`);
 
-    // Close previous connections
+    // Clean up any previous WS connections
     wsManager.closeAll();
 
-    // WebSocket streams (direct to Binance — works from browser)
-    subscribeTicker(activeSymbol);
-    subscribeKline(activeSymbol, activeTimeframe);
-    subscribeOrderbook(activeSymbol);
-    subscribeTrades(activeSymbol);
+    // 1. Fetch historical candles via REST (most important for chart)
+    fetchKlines(activeSymbol, activeTimeframe)
+      .then((candles) => {
+        console.log(`[App] Loaded ${candles.length} candles`);
+        useMarketStore.getState().setCandles(`${activeSymbol}:${activeTimeframe}`, candles);
+      })
+      .catch((err) => console.error('[App] Klines failed:', err));
 
-    // REST fetches (via Vercel proxy or direct)
-    fetchKlines(activeSymbol, activeTimeframe).then((candles) => {
-      console.log(`[App] Loaded ${candles.length} candles for ${activeSymbol}`);
-      useMarketStore.getState().setCandles(`${activeSymbol}:${activeTimeframe}`, candles);
-    }).catch((err) => console.error('[App] Klines error:', err));
+    // 2. Start WebSocket streams for live updates
+    try {
+      subscribeTicker(activeSymbol);
+      subscribeKline(activeSymbol, activeTimeframe);
+      subscribeOrderbook(activeSymbol);
+      subscribeTrades(activeSymbol);
+    } catch (err) {
+      console.error('[App] WS subscription error:', err);
+    }
 
-    fetchFundingRates().catch((err) => console.error('[App] Funding rates error:', err));
-    fetchAndStoreMarkets().catch((err) => console.error('[App] Prediction markets error:', err));
-    fetchTopCoins().catch((err) => console.error('[App] CoinGecko error:', err));
+    // 3. Fetch supplementary data
+    fetchFundingRates();
+    fetchAndStoreMarkets();
+    fetchTopCoins();
 
-    // Refresh REST data periodically
+    // 4. Periodic refresh for REST data
     const interval = setInterval(() => {
-      fetchAndStoreMarkets().catch(console.error);
-      fetchFundingRates().catch(console.error);
-      fetchTopCoins().catch(console.error);
+      fetchFundingRates();
+      fetchAndStoreMarkets();
+      fetchTopCoins();
     }, 60_000);
 
     return () => {
@@ -100,7 +106,7 @@ export default function App() {
       <div className="grid-container">
         <ResponsiveGridLayout
           className="layout"
-          layouts={DEFAULT_LAYOUTS}
+          layouts={LAYOUTS}
           breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
           cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
           rowHeight={28}
@@ -110,45 +116,33 @@ export default function App() {
         >
           <div key="chart" className="panel">
             <div className="panel-header">Chart — {activeSymbol} {activeTimeframe}</div>
-            <div className="panel-body chart-body">
+            <div className="panel-body panel-body--chart">
               <TradingChart />
             </div>
           </div>
           <div key="watchlist" className="panel">
             <div className="panel-header">Watchlist</div>
-            <div className="panel-body">
-              <Watchlist />
-            </div>
+            <div className="panel-body"><Watchlist /></div>
           </div>
           <div key="ai" className="panel">
             <div className="panel-header">AI Coach</div>
-            <div className="panel-body">
-              <AiCoach />
-            </div>
+            <div className="panel-body"><AiCoach /></div>
           </div>
           <div key="orderbook" className="panel">
             <div className="panel-header">Orderbook</div>
-            <div className="panel-body">
-              <Orderbook />
-            </div>
+            <div className="panel-body"><Orderbook /></div>
           </div>
           <div key="portfolio" className="panel">
             <div className="panel-header">Portfolio</div>
-            <div className="panel-body">
-              <Portfolio />
-            </div>
+            <div className="panel-body"><Portfolio /></div>
           </div>
           <div key="strategies" className="panel">
             <div className="panel-header">Strategies</div>
-            <div className="panel-body">
-              <StrategyPanel />
-            </div>
+            <div className="panel-body"><StrategyPanel /></div>
           </div>
           <div key="news" className="panel">
             <div className="panel-header">News & Alerts</div>
-            <div className="panel-body">
-              <NewsFeed />
-            </div>
+            <div className="panel-body"><NewsFeed /></div>
           </div>
         </ResponsiveGridLayout>
       </div>

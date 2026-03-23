@@ -10,17 +10,16 @@ export function Header() {
   const activeSymbol = useMarketStore((s) => s.activeSymbol);
   const activeTimeframe = useMarketStore((s) => s.activeTimeframe);
   const setActiveTimeframe = useMarketStore((s) => s.setActiveTimeframe);
-  const ticker = useMarketStore((s) => s.tickers.get(activeSymbol));
+  const ticker = useMarketStore((s) => s.tickers[activeSymbol]);
   const balance = usePortfolioStore((s) => s.balance);
   const positions = usePortfolioStore((s) => s.positions);
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
-  const connections = useMarketStore((s) => s.connections);
+  const connectionStatus = useMarketStore((s) => s.connectionStatus);
 
   const totalPnl = positions.reduce((sum, p) => sum + p.pnl, 0);
   const pnlColor = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
-
-  const connectedCount = Array.from(connections.values()).filter((s) => s === 'connected').length;
+  const connectedCount = Object.values(connectionStatus).filter((s) => s === 'connected').length;
 
   return (
     <header style={{
@@ -31,12 +30,13 @@ export function Header() {
       background: 'var(--bg-secondary)',
       borderBottom: '1px solid var(--border)',
       flexShrink: 0,
+      flexWrap: 'wrap',
     }}>
       <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>
         TERMINAL
       </div>
 
-      {ticker && (
+      {ticker ? (
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <span style={{ fontWeight: 600 }}>{activeSymbol}</span>
           <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
@@ -50,6 +50,8 @@ export function Header() {
             {formatPercent(ticker.changePercent24h)}
           </span>
         </div>
+      ) : (
+        <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Loading {activeSymbol}...</div>
       )}
 
       <div style={{ display: 'flex', gap: '2px' }}>
@@ -89,21 +91,14 @@ export function Header() {
           </span>
         </div>
         <div style={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
+          width: 8, height: 8, borderRadius: '50%',
           background: connectedCount > 0 ? 'var(--green)' : 'var(--red)',
         }} title={`${connectedCount} source(s) connected`} />
         <button
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           style={{
-            background: 'none',
-            border: '1px solid var(--border)',
-            borderRadius: '4px',
-            padding: '4px 8px',
-            color: 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontSize: '11px',
+            background: 'none', border: '1px solid var(--border)', borderRadius: '4px',
+            padding: '4px 8px', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '11px',
           }}
         >
           {theme === 'dark' ? 'Light' : 'Dark'}

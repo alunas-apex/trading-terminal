@@ -2,44 +2,35 @@ import { create } from 'zustand';
 import type { Candle, Orderbook, Ticker, FundingRate, PredictionMarket, Timeframe, WatchlistItem, Trade } from '../types/market';
 
 interface MarketState {
-  // Active symbol
   activeSymbol: string;
   activeTimeframe: Timeframe;
   setActiveSymbol: (symbol: string) => void;
   setActiveTimeframe: (tf: Timeframe) => void;
 
-  // Candle data
-  candles: Map<string, Candle[]>;
+  candles: Record<string, Candle[]>;
   setCandles: (key: string, candles: Candle[]) => void;
   appendCandle: (key: string, candle: Candle) => void;
 
-  // Tickers
-  tickers: Map<string, Ticker>;
+  tickers: Record<string, Ticker>;
   updateTicker: (ticker: Ticker) => void;
 
-  // Orderbook
   orderbook: Orderbook | null;
   setOrderbook: (ob: Orderbook) => void;
 
-  // Recent trades
   recentTrades: Trade[];
   addTrade: (trade: Trade) => void;
 
-  // Funding rates
-  fundingRates: Map<string, FundingRate>;
+  fundingRates: Record<string, FundingRate>;
   updateFundingRate: (fr: FundingRate) => void;
 
-  // Prediction markets
   predictionMarkets: PredictionMarket[];
   setPredictionMarkets: (markets: PredictionMarket[]) => void;
 
-  // Watchlist
   watchlist: WatchlistItem[];
   addToWatchlist: (item: WatchlistItem) => void;
   removeFromWatchlist: (symbol: string) => void;
 
-  // Connection status
-  connections: Map<string, 'connected' | 'disconnected' | 'connecting'>;
+  connectionStatus: Record<string, 'connected' | 'disconnected' | 'connecting'>;
   setConnectionStatus: (source: string, status: 'connected' | 'disconnected' | 'connecting') => void;
 }
 
@@ -51,57 +42,42 @@ const DEFAULT_WATCHLIST: WatchlistItem[] = [
   { symbol: 'XRPUSDT', name: 'XRP', assetClass: 'crypto', source: 'binance' },
 ];
 
-export const useMarketStore = create<MarketState>((set, get) => ({
+export const useMarketStore = create<MarketState>((set) => ({
   activeSymbol: 'BTCUSDT',
   activeTimeframe: '1h',
   setActiveSymbol: (symbol) => set({ activeSymbol: symbol }),
   setActiveTimeframe: (tf) => set({ activeTimeframe: tf }),
 
-  candles: new Map(),
+  candles: {},
   setCandles: (key, candles) =>
-    set((s) => {
-      const next = new Map(s.candles);
-      next.set(key, candles);
-      return { candles: next };
-    }),
+    set((s) => ({ candles: { ...s.candles, [key]: candles } })),
   appendCandle: (key, candle) =>
     set((s) => {
-      const next = new Map(s.candles);
-      const existing = next.get(key) ?? [];
+      const existing = s.candles[key] ?? [];
       const last = existing[existing.length - 1];
+      let updated: Candle[];
       if (last && last.time === candle.time) {
-        existing[existing.length - 1] = candle;
+        updated = [...existing.slice(0, -1), candle];
       } else {
-        existing.push(candle);
+        updated = [...existing, candle];
       }
-      next.set(key, existing);
-      return { candles: next };
+      return { candles: { ...s.candles, [key]: updated } };
     }),
 
-  tickers: new Map(),
+  tickers: {},
   updateTicker: (ticker) =>
-    set((s) => {
-      const next = new Map(s.tickers);
-      next.set(ticker.symbol, ticker);
-      return { tickers: next };
-    }),
+    set((s) => ({ tickers: { ...s.tickers, [ticker.symbol]: ticker } })),
 
   orderbook: null,
   setOrderbook: (ob) => set({ orderbook: ob }),
 
   recentTrades: [],
   addTrade: (trade) =>
-    set((s) => ({
-      recentTrades: [trade, ...s.recentTrades].slice(0, 100),
-    })),
+    set((s) => ({ recentTrades: [trade, ...s.recentTrades].slice(0, 50) })),
 
-  fundingRates: new Map(),
+  fundingRates: {},
   updateFundingRate: (fr) =>
-    set((s) => {
-      const next = new Map(s.fundingRates);
-      next.set(fr.symbol, fr);
-      return { fundingRates: next };
-    }),
+    set((s) => ({ fundingRates: { ...s.fundingRates, [fr.symbol]: fr } })),
 
   predictionMarkets: [],
   setPredictionMarkets: (markets) => set({ predictionMarkets: markets }),
@@ -112,11 +88,7 @@ export const useMarketStore = create<MarketState>((set, get) => ({
   removeFromWatchlist: (symbol) =>
     set((s) => ({ watchlist: s.watchlist.filter((w) => w.symbol !== symbol) })),
 
-  connections: new Map(),
+  connectionStatus: {},
   setConnectionStatus: (source, status) =>
-    set((s) => {
-      const next = new Map(s.connections);
-      next.set(source, status);
-      return { connections: next };
-    }),
+    set((s) => ({ connectionStatus: { ...s.connectionStatus, [source]: status } })),
 }));

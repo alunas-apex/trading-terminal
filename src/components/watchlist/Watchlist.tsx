@@ -10,21 +10,18 @@ export function Watchlist() {
 
   return (
     <div style={{ fontSize: '11px' }}>
-      {/* Crypto watchlist */}
       <div style={{ padding: '4px 8px', color: 'var(--text-muted)', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' }}>
         Crypto
       </div>
       {watchlist.map((item) => {
-        const ticker = tickers.get(item.symbol);
+        const ticker = tickers[item.symbol];
         const isActive = item.symbol === activeSymbol;
         return (
           <div
             key={item.symbol}
             onClick={() => setActiveSymbol(item.symbol)}
             style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '4px 8px',
+              display: 'flex', justifyContent: 'space-between', padding: '4px 8px',
               cursor: 'pointer',
               background: isActive ? 'var(--bg-hover)' : 'transparent',
               borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
@@ -50,7 +47,6 @@ export function Watchlist() {
         );
       })}
 
-      {/* Prediction Markets */}
       {predictionMarkets.length > 0 && (
         <>
           <div style={{ padding: '8px 8px 4px', color: 'var(--text-muted)', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', borderTop: '1px solid var(--border)', marginTop: '4px' }}>
@@ -63,21 +59,16 @@ export function Watchlist() {
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                padding: '4px 8px',
-                textDecoration: 'none',
-                color: 'inherit',
+                display: 'flex', justifyContent: 'space-between', padding: '4px 8px',
+                textDecoration: 'none', color: 'inherit',
               }}
             >
               <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '8px', fontSize: '10px' }}>
                 {m.question}
               </span>
               <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontWeight: 600,
+                fontFamily: 'var(--font-mono)', fontWeight: 600, flexShrink: 0,
                 color: m.probability > 60 ? 'var(--green)' : m.probability < 40 ? 'var(--red)' : 'var(--yellow)',
-                flexShrink: 0,
               }}>
                 {m.probability.toFixed(0)}%
               </span>

@@ -1,10 +1,4 @@
 import { wsManager } from '../websocket';
-import {
-  normalizeBinanceTicker,
-  normalizeBinanceKline,
-  normalizeBinanceOrderbook,
-  normalizeBinanceTrade,
-} from '../dataAggregator';
 import { useMarketStore } from '../../stores/marketStore';
 import type { Candle, Timeframe } from '../../types/market';
 
@@ -21,21 +15,26 @@ export function subscribeTicker(symbol: string): void {
   wsManager.add(`binance-ticker-${symbol}`, {
     url: `${BINANCE_WS}/${stream}`,
     onMessage: (data) => {
-      const record = data as Record<string, unknown>;
-      if (record.e === '24hrTicker') {
-        const ticker = normalizeBinanceTicker(record);
-        useMarketStore.getState().updateTicker(ticker);
-      }
+      const d = data as Record<string, string>;
+      if (d.e !== '24hrTicker') return;
+      useMarketStore.getState().updateTicker({
+        symbol: d.s,
+        price: parseFloat(d.c),
+        change24h: parseFloat(d.p),
+        changePercent24h: parseFloat(d.P),
+        high24h: parseFloat(d.h),
+        low24h: parseFloat(d.l),
+        volume24h: parseFloat(d.v),
+        source: 'binance',
+        timestamp: Date.now(),
+      });
     },
     onOpen: () => {
-      console.log(`[Binance WS] Ticker connected: ${symbol}`);
+      console.log('[WS] Ticker connected:', symbol);
       useMarketStore.getState().setConnectionStatus('binance', 'connected');
     },
     onClose: () => {
       useMarketStore.getState().setConnectionStatus('binance', 'disconnected');
-    },
-    onError: (err) => {
-      console.error(`[Binance WS] Ticker error: ${symbol}`, err);
     },
   });
 }
@@ -45,12 +44,17 @@ export function subscribeKline(symbol: string, timeframe: Timeframe): void {
   wsManager.add(`binance-kline-${symbol}-${timeframe}`, {
     url: `${BINANCE_WS}/${stream}`,
     onMessage: (data) => {
-      const record = data as Record<string, unknown>;
-      if (record.e === 'kline') {
-        const candle = normalizeBinanceKline(record);
-        const key = `${symbol}:${timeframe}`;
-        useMarketStore.getState().appendCandle(key, candle);
-      }
+      const d = data as Record<string, unknown>;
+      if (d.e !== 'kline') return;
+      const k = d.k as Record<string, string | number>;
+      useMarketStore.getState().appendCandle(`${symbol}:${timeframe}`, {
+        time: Math.floor((k.t as number) / 1000),
+        open: parseFloat(k.o as string),
+        high: parseFloat(k.h as string),
+        low: parseFloat(k.l as string),
+        close: parseFloat(k.c as string),
+        volume: parseFloat(k.v as string),
+      });
     },
   });
 }
@@ -60,9 +64,14 @@ export function subscribeOrderbook(symbol: string): void {
   wsManager.add(`binance-orderbook-${symbol}`, {
     url: `${BINANCE_WS}/${stream}`,
     onMessage: (data) => {
-      const record = data as Record<string, unknown>;
-      const ob = normalizeBinanceOrderbook({ ...record, s: symbol });
-      useMarketStore.getState().setOrderbook(ob);
+      const d = data as { bids?: string[][]; asks?: string[][]; lastUpdateId?: number };
+      if (!d.bids || !d.asks) return;
+      useMarketStore.getState().setOrderbook({
+        symbol,
+        bids: d.bids.map(([p, q]) => ({ price: parseFloat(p), quantity: parseFloat(q) })),
+        asks: d.asks.map(([p, q]) => ({ price: parseFloat(p), quantity: parseFloat(q) })),
+        timestamp: Date.now(),
+      });
     },
   });
 }
@@ -72,11 +81,16 @@ export function subscribeTrades(symbol: string): void {
   wsManager.add(`binance-trades-${symbol}`, {
     url: `${BINANCE_WS}/${stream}`,
     onMessage: (data) => {
-      const record = data as Record<string, unknown>;
-      if (record.e === 'trade') {
-        const trade = normalizeBinanceTrade(record);
-        useMarketStore.getState().addTrade(trade);
-      }
+      const d = data as Record<string, string | number | boolean>;
+      if (d.e !== 'trade') return;
+      useMarketStore.getState().addTrade({
+        id: String(d.t),
+        symbol: d.s as string,
+        price: parseFloat(d.p as string),
+        quantity: parseFloat(d.q as string),
+        side: d.m ? 'sell' : 'buy',
+        timestamp: d.T as number,
+      });
     },
   });
 }
@@ -86,15 +100,18 @@ export async function fetchKlines(
   timeframe: Timeframe,
   limit: number = 500
 ): Promise<Candle[]> {
-  // Use Vercel serverless proxy (avoids CORS) or direct Binance API
-  const isVercel = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
-  const url = isVercel
+  // Always use the proxy on deployed environments to avoid any CORS issues
+  const useProxy = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+  const url = useProxy
     ? `/api/klines?symbol=${symbol}&interval=${TF_MAP[timeframe]}&limit=${limit}`
     : `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${TF_MAP[timeframe]}&limit=${limit}`;
 
+  console.log('[Binance] Fetching klines:', url);
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Klines fetch failed: ${res.status}`);
+  if (!res.ok) throw new Error(`Klines HTTP ${res.status}`);
   const data = (await res.json()) as (string | number)[][];
+  if (!Array.isArray(data)) throw new Error('Klines response is not an array');
+  console.log(`[Binance] Got ${data.length} klines`);
   return data.map((k) => ({
     time: Math.floor((k[0] as number) / 1000),
     open: parseFloat(k[1] as string),
@@ -107,13 +124,12 @@ export async function fetchKlines(
 
 export async function fetchFundingRates(): Promise<void> {
   try {
-    const isVercel = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
-    const url = isVercel
-      ? '/api/funding-rates'
-      : 'https://fapi.binance.com/fapi/v1/premiumIndex';
+    const useProxy = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+    const url = useProxy ? '/api/funding-rates' : 'https://fapi.binance.com/fapi/v1/premiumIndex';
     const res = await fetch(url);
     if (!res.ok) return;
     const data = (await res.json()) as Record<string, unknown>[];
+    if (!Array.isArray(data)) return;
     const store = useMarketStore.getState();
     for (const item of data.slice(0, 20)) {
       store.updateFundingRate({
@@ -124,10 +140,6 @@ export async function fetchFundingRates(): Promise<void> {
       });
     }
   } catch (err) {
-    console.error('[Binance] Funding rates error:', err);
+    console.warn('[Binance] Funding rates error:', err);
   }
-}
-
-export function unsubscribeAll(): void {
-  wsManager.closeAll();
 }

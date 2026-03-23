@@ -1,15 +1,20 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+export const config = { runtime: 'edge' };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const { symbol = 'BTCUSDT', interval = '1h', limit = '500' } = req.query;
-  try {
-    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-    const response = await fetch(url);
-    const data = await response.json();
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=30');
-    res.status(200).json(data);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch klines' });
-  }
+export default async function handler(req: Request) {
+  const url = new URL(req.url);
+  const symbol = url.searchParams.get('symbol') || 'BTCUSDT';
+  const interval = url.searchParams.get('interval') || '1h';
+  const limit = url.searchParams.get('limit') || '500';
+
+  const binanceUrl = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const res = await fetch(binanceUrl);
+  const data = await res.json();
+
+  return new Response(JSON.stringify(data), {
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 's-maxage=10, stale-while-revalidate=30',
+    },
+  });
 }

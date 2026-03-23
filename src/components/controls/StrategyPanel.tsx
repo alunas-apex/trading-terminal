@@ -6,7 +6,7 @@ const STRATEGIES = [
   { id: 'rsi-mean-reversion', name: 'RSI Mean Reversion', category: 'Swing', phase: 2 },
   { id: 'funding-rate-arb', name: 'Funding Rate Arb', category: 'Crypto Perps', phase: 2 },
   { id: 'options-wheel', name: 'Options Wheel', category: 'Options', phase: 2 },
-  { id: 'prediction-arb', name: 'Prediction Market Arb', category: 'Prediction', phase: 2 },
+  { id: 'prediction-arb', name: 'Prediction Mkt Arb', category: 'Prediction', phase: 2 },
   { id: 'gap-fill', name: 'Gap Fill', category: 'Day Trading', phase: 3 },
   { id: 'breakout-retest', name: 'Breakout-Retest', category: 'Day Trading', phase: 3 },
   { id: 'trend-following', name: 'Trend Following', category: 'Swing', phase: 3 },
@@ -22,68 +22,37 @@ export function StrategyPanel() {
   const toggleStrategy = useSettingsStore((s) => s.toggleStrategy);
   const fundingRates = useMarketStore((s) => s.fundingRates);
 
-  const topFundingRate = Array.from(fundingRates.values())
-    .sort((a, b) => Math.abs(b.rate) - Math.abs(a.rate))[0];
+  const frEntries = Object.entries(fundingRates);
+  const topFR = frEntries.sort((a, b) => Math.abs(b[1].rate) - Math.abs(a[1].rate))[0];
 
   return (
     <div style={{ fontSize: '11px', padding: '8px' }}>
-      {/* Funding rate highlight */}
-      {topFundingRate && (
-        <div style={{
-          padding: '6px 8px',
-          background: 'var(--bg-secondary)',
-          borderRadius: '4px',
-          marginBottom: '8px',
-          fontSize: '10px',
-        }}>
+      {topFR && (
+        <div style={{ padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: '4px', marginBottom: '8px', fontSize: '10px' }}>
           <span style={{ color: 'var(--text-muted)' }}>Top Funding: </span>
-          <span style={{ fontWeight: 600 }}>{topFundingRate.symbol.replace('USDT', '')} </span>
-          <span style={{
-            fontFamily: 'var(--font-mono)',
-            color: topFundingRate.rate >= 0 ? 'var(--green)' : 'var(--red)',
-          }}>
-            {(topFundingRate.rate * 100).toFixed(4)}%
+          <span style={{ fontWeight: 600 }}>{topFR[0].replace('USDT', '')} </span>
+          <span style={{ fontFamily: 'var(--font-mono)', color: topFR[1].rate >= 0 ? 'var(--green)' : 'var(--red)' }}>
+            {(topFR[1].rate * 100).toFixed(4)}%
           </span>
         </div>
       )}
-
-      {STRATEGIES.map((strategy) => {
-        const isEnabled = enabledStrategies.includes(strategy.id);
-        const isAvailable = strategy.phase <= 1;
-
+      {STRATEGIES.map((strat) => {
+        const enabled = enabledStrategies.includes(strat.id);
         return (
-          <div
-            key={strategy.id}
-            onClick={() => isAvailable && toggleStrategy(strategy.id)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '4px 0',
-              cursor: isAvailable ? 'pointer' : 'default',
-              opacity: isAvailable ? 1 : 0.4,
-            }}
-          >
+          <div key={strat.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 0', opacity: 0.5, cursor: 'default' }}>
             <div style={{
-              width: 14,
-              height: 14,
-              borderRadius: '3px',
-              border: `1px solid ${isEnabled ? 'var(--accent)' : 'var(--border)'}`,
-              background: isEnabled ? 'var(--accent)' : 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '9px',
-              color: '#fff',
-              flexShrink: 0,
+              width: 14, height: 14, borderRadius: '3px', flexShrink: 0,
+              border: `1px solid ${enabled ? 'var(--accent)' : 'var(--border)'}`,
+              background: enabled ? 'var(--accent)' : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '9px', color: '#fff',
             }}>
-              {isEnabled ? '\u2713' : ''}
+              {enabled ? '\u2713' : ''}
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 500 }}>{strategy.name}</div>
+              <div style={{ fontWeight: 500 }}>{strat.name}</div>
               <div style={{ fontSize: '9px', color: 'var(--text-muted)' }}>
-                {strategy.category}
-                {!isAvailable && ` \u2022 Phase ${strategy.phase}`}
+                {strat.category} \u2022 Phase {strat.phase}
               </div>
             </div>
           </div>

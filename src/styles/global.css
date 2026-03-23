@@ -21,7 +21,7 @@
   --red-dim: rgba(239, 68, 68, 0.15);
   --yellow: #eab308;
   --blue: #3b82f6;
-  --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -59,9 +59,10 @@ html, body, #root {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px;
+  min-height: 0;
 }
 
+/* Panel structure */
 .panel {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -86,9 +87,7 @@ html, body, #root {
   flex-shrink: 0;
 }
 
-.panel-header:active {
-  cursor: grabbing;
-}
+.panel-header:active { cursor: grabbing; }
 
 .panel-body {
   flex: 1;
@@ -96,52 +95,21 @@ html, body, #root {
   min-height: 0;
 }
 
-/* Chart needs explicit positioning for lightweight-charts */
-.chart-body {
+/* Chart panel needs relative positioning for absolute-positioned chart canvas */
+.panel-body--chart {
   position: relative;
   overflow: hidden;
 }
 
 /* Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
-}
-
-/* Grid layout overrides */
-.react-grid-item {
-  transition: none !important;
-}
-
-.react-grid-item.react-draggable-dragging {
-  transition: none !important;
-  z-index: 100;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-}
-
-.react-grid-placeholder {
-  background: var(--accent) !important;
-  opacity: 0.15 !important;
-  border-radius: 6px;
-}
-
-.react-resizable-handle {
-  background: none !important;
-}
-
-.react-resizable-handle::after {
-  border-color: var(--text-muted) !important;
-}
+/* React Grid Layout */
+.react-grid-item { transition: none !important; }
+.react-grid-item.react-draggable-dragging { z-index: 100; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+.react-grid-placeholder { background: var(--accent) !important; opacity: 0.15 !important; border-radius: 6px; }
+.react-resizable-handle { background: none !important; }
+.react-resizable-handle::after { border-color: var(--text-muted) !important; }
